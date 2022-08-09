@@ -38,7 +38,7 @@ type Options struct {
 	// Directory to load templates. Default is "templates".
 	Directory string
 	// FileSystem to access files
-	FileSystem FileSystem
+	FileSystem fs.FS
 	// Asset function to use in place of directory. Defaults to nil.
 	Asset func(name string) ([]byte, error)
 	// AssetNames function to use in place of directory. Defaults to nil.
@@ -330,7 +330,7 @@ func (r *Render) HTML(w io.Writer, status int, name string, binding interface{},
 
 	// If we are in development mode, recompile the templates on every HTML request.
 	r.lock.RLock() // rlock here because we're reading the hasWatcher
-	if r.templates == nil {
+	if r.templates == nil || r.opt.IsDevelopment && !r.hasWatche {
 		r.lock.RUnlock() // runlock here because CompileTemplates will lock
 
 		if len(opt.Funcs) > 0 {

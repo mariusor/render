@@ -7,7 +7,6 @@ import (
 	"embed"
 	"io"
 	"io/fs"
-	"path/filepath"
 )
 
 // EmbedFileSystem implements FileSystem on top of an embed.FS
@@ -15,20 +14,14 @@ type EmbedFileSystem struct {
 	embed.FS
 }
 
-var _ FileSystem = &EmbedFileSystem{}
+var _ fs.FS = &EmbedFileSystem{}
 
-func (e *EmbedFileSystem) Walk(root string, walkFn filepath.WalkFunc) error {
-	return fs.WalkDir(e.FS, root, func(path string, d fs.DirEntry, _ error) error {
+func (e *EmbedFileSystem) Walk(root string, walkFn fs.WalkDirFunc) error {
+	return fs.WalkDir(e.FS, root, func(path string, d fs.DirEntry, err error) error {
 		if d == nil {
 			return nil
 		}
-
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-
-		return walkFn(path, info, err)
+		return walkFn(path, d, err)
 	})
 }
 
@@ -36,13 +29,12 @@ type tmplFS struct {
 	fs.FS
 }
 
-func (tfs tmplFS) Walk(root string, walkFn filepath.WalkFunc) error {
+func (tfs tmplFS) Walk(root string, walkFn fs.WalkDirFunc) error {
 	return fs.WalkDir(tfs, root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		info, err := d.Info()
-		return walkFn(path, info, err)
+		return walkFn(path, d, err)
 	})
 }
 
@@ -56,6 +48,6 @@ func (tfs tmplFS) ReadFile(filename string) ([]byte, error) {
 }
 
 // FS converts io/fs.FS to FileSystem
-func FS(oriFS fs.FS) FileSystem {
+func FS(oriFS fs.FS) fs.FS {
 	return tmplFS{oriFS}
 }
