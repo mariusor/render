@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/fsnotify/fsnotify"
 )
 
 const (
@@ -194,40 +192,21 @@ func (r *Render) prepareOptions() {
 	}
 }
 
-func (r *Render) CompileTemplates() {
+func (r *Render) CompileTemplates() error {
 	if r.opt.Asset == nil || r.opt.AssetNames == nil {
-		r.compileTemplatesFromDir()
-		r.compiled = true
-		return
+		return r.compileTemplatesFromDir()
 	}
 
-	r.compileTemplatesFromAsset()
-	r.compiled = true
+	return r.compileTemplatesFromAsset()
 }
 
-func (r *Render) compileTemplatesFromDir() {
+func (r *Render) compileTemplatesFromDir() error {
 	dir := r.opt.Directory
 	tmpTemplates := template.New(dir)
 	tmpTemplates.Delims(r.opt.Delims.Left, r.opt.Delims.Right)
 
-	var watcher *fsnotify.Watcher
-	if r.opt.IsDevelopment {
-		var err error
-		watcher, err = fsnotify.NewWatcher()
-		if err != nil {
-			log.Printf("Unable to create new watcher for template files. Templates will be recompiled on every render. Error: %v\n", err)
-		}
-	}
-
 	// Walk the supplied directory and compile any files that match our extension list.
-	_ = r.opt.FileSystem.Walk(dir, func(path string, info os.FileInfo, _ error) error {
-		// Fix same-extension-dirs bug: some dir might be named to: "users.tmpl", "local.html".
-		// These dirs should be excluded as they are not valid golang templates, but files under
-		// them should be treat as normal.
-		// If is a dir, return immediately (dir is not a valid golang template).
-		if info != nil && watcher != nil {
-			_ = watcher.Add(path)
-		}
+	err := r.opt.FileSystem.Walk(dir, func(path string, info os.FileInfo, _ error) error {
 		if info == nil || info.IsDir() {
 			return nil
 		}
@@ -244,9 +223,10 @@ func (r *Render) compileTemplatesFromDir() {
 
 		for _, extension := range r.opt.Extensions {
 			if ext == extension {
-				buf, err := r.opt.FileSystem.ReadFile(path)
+				var buf []byte
+				buf, err = r.opt.FileSystem.ReadFile(path)
 				if err != nil {
-					panic(err)
+					return err
 				}
 
 				name := rel[0 : len(rel)-len(ext)]
@@ -263,31 +243,16 @@ func (r *Render) compileTemplatesFromDir() {
 				}
 			}
 		}
-		return nil
+		return err
 	})
 
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	r.templates = tmpTemplates
-	if r.hasWatcher = watcher != nil; r.hasWatcher {
-		go func() {
-			select {
-			case _, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-			case _, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-			}
-			watcher.Close()
-			r.CompileTemplates()
-		}()
-	}
+	return err
 }
 
-func (r *Render) compileTemplatesFromAsset() {
+func (r *Render) compileTemplatesFromAsset() error {
 	dir := r.opt.Directory
 	tmpTemplates := template.New(dir)
 	tmpTemplates.Delims(r.opt.Delims.Left, r.opt.Delims.Right)
@@ -299,7 +264,7 @@ func (r *Render) compileTemplatesFromAsset() {
 
 		rel, err := filepath.Rel(dir, path)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		ext := ""
@@ -311,7 +276,7 @@ func (r *Render) compileTemplatesFromAsset() {
 			if ext == extension {
 				buf, err := r.opt.Asset(path)
 				if err != nil {
-					panic(err)
+					return err
 				}
 
 				name := rel[0 : len(rel)-len(ext)]
@@ -324,7 +289,7 @@ func (r *Render) compileTemplatesFromAsset() {
 
 				// Break out if this parsing fails. We don't want any silent server starts.
 				if tmpl, err = tmpl.Funcs(helperFuncs).Parse(string(buf)); err != nil {
-					break
+					return err
 				}
 			}
 		}
@@ -332,6 +297,7 @@ func (r *Render) compileTemplatesFromAsset() {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	r.templates = tmpTemplates
+	return nil
 }
 
 // TemplateLookup is a wrapper around template.Lookup and returns
