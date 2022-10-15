@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,24 +13,12 @@ import (
 )
 
 const (
-	// ContentBinary header value for binary data.
-	ContentBinary = "application/octet-stream"
 	// ContentHTML header value for HTML data.
 	ContentHTML = "text/html"
-	// ContentJSON header value for JSON data.
-	ContentJSON = "application/json"
-	// ContentJSONP header value for JSONP data.
-	ContentJSONP = "application/javascript"
 	// ContentLength header constant.
 	ContentLength = "Content-Length"
-	// ContentText header value for Text data.
-	ContentText = "text/plain"
 	// ContentType header constant.
 	ContentType = "Content-Type"
-	// ContentXHTML header value for XHTML data.
-	ContentXHTML = "application/xhtml+xml"
-	// ContentXML header value for XML data.
-	ContentXML = "text/xml"
 	// Default character encoding.
 	defaultCharset = "UTF-8"
 )
@@ -68,26 +55,10 @@ type Options struct {
 	Charset string
 	// If DisableCharset is set to true, it will not append the above Charset value to the Content-Type header. Default is false.
 	DisableCharset bool
-	// Outputs human readable JSON.
-	IndentJSON bool
-	// Outputs human readable XML. Default is false.
-	IndentXML bool
 	// Prefixes the JSON output with the given bytes. Default is false.
 	PrefixJSON []byte
-	// Prefixes the XML output with the given bytes.
-	PrefixXML []byte
 	// Allows changing the binary content type.
-	BinaryContentType string
-	// Allows changing the HTML content type.
 	HTMLContentType string
-	// Allows changing the JSON content type.
-	JSONContentType string
-	// Allows changing the JSONP content type.
-	JSONPContentType string
-	// Allows changing the Text content type.
-	TextContentType string
-	// Allows changing the XML content type.
-	XMLContentType string
 	// If IsDevelopment is set to true, this will recompile the templates on every request. Default is false.
 	IsDevelopment bool
 	// If UseMutexLock is set to true, the standard `sync.RWMutex` lock will be used instead of the lock free implementation. Default is false.
@@ -95,12 +66,8 @@ type Options struct {
 	UseMutexLock bool
 	// Unescape HTML characters "&<>" to their original values. Default is false.
 	UnEscapeHTML bool
-	// Streams JSON responses instead of marshalling prior to sending. Default is false.
-	StreamingJSON bool
 	// Require that all partials executed in the layout are implemented in all templates using the layout. Default is false.
 	RequirePartials bool
-	// Deprecated: Use the above `RequirePartials` instead of this. As of Go 1.6, blocks are built in. Default is false.
-	RequireBlocks bool
 	// Disables automatic rendering of http.StatusInternalServerError when an error occurs. Default is false.
 	DisableHTTPErrorRendering bool
 	// Enables using partials without the current filename suffix which allows use of the same template in multiple files. e.g {{ partial "carosuel" }} inside the home template will match carosel-home or carosel.
@@ -128,9 +95,6 @@ type Render struct {
 	opt             Options
 	templates       *template.Template
 	compiledCharset string
-	hasWatcher      bool
-
-	compiled bool
 }
 
 // New constructs a new Render instance with the supplied options.
@@ -164,23 +128,8 @@ func (r *Render) prepareOptions() {
 	if len(r.opt.Extensions) == 0 {
 		r.opt.Extensions = []string{".tmpl"}
 	}
-	if len(r.opt.BinaryContentType) == 0 {
-		r.opt.BinaryContentType = ContentBinary
-	}
 	if len(r.opt.HTMLContentType) == 0 {
 		r.opt.HTMLContentType = ContentHTML
-	}
-	if len(r.opt.JSONContentType) == 0 {
-		r.opt.JSONContentType = ContentJSON
-	}
-	if len(r.opt.JSONPContentType) == 0 {
-		r.opt.JSONPContentType = ContentJSONP
-	}
-	if len(r.opt.TextContentType) == 0 {
-		r.opt.TextContentType = ContentText
-	}
-	if len(r.opt.XMLContentType) == 0 {
-		r.opt.XMLContentType = ContentXML
 	}
 	if r.opt.BufferPool == nil {
 		r.opt.BufferPool = NewSizedBufferPool(32, 1<<19) // 32 buffers of size 512KiB each
@@ -323,19 +272,6 @@ func (r *Render) layoutFuncs(templates *template.Template, name string, binding 
 		},
 		"current": func() (string, error) {
 			return name, nil
-		},
-		"block": func(partialName string) (template.HTML, error) {
-			log.Println("Render's `block` implementation is now depericated. Use `partial` as a drop in replacement.")
-			fullPartialName := fmt.Sprintf("%s-%s", partialName, name)
-			if templates.Lookup(fullPartialName) == nil && r.opt.RenderPartialsWithoutPrefix {
-				fullPartialName = partialName
-			}
-			if r.opt.RequireBlocks || templates.Lookup(fullPartialName) != nil {
-				buf, err := r.execute(templates, fullPartialName, binding)
-				// Return safe HTML here since we are rendering our own template.
-				return template.HTML(buf.String()), err
-			}
-			return "", nil
 		},
 		"partial": func(partialName string) (template.HTML, error) {
 			fullPartialName := fmt.Sprintf("%s-%s", partialName, name)

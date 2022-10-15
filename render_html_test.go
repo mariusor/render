@@ -100,27 +100,6 @@ func BenchmarkSmallHTMLBuffers(b *testing.B) {
 	}
 }
 
-func TestHTMLXHTML(t *testing.T) {
-	render := New(Options{
-		Directory:       "testdata/basic",
-		HTMLContentType: ContentXHTML,
-	})
-
-	var err error
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err = render.HTML(w, http.StatusOK, "hello", "gophers")
-	})
-
-	res := httptest.NewRecorder()
-	req, _ := http.NewRequestWithContext(ctx, "GET", "/foo", nil)
-	h.ServeHTTP(res, req)
-
-	expectNil(t, err)
-	expect(t, res.Code, 200)
-	expect(t, res.Header().Get(ContentType), ContentXHTML+"; charset=UTF-8")
-	expect(t, res.Body.String(), "<h1>Hello gophers</h1>\n")
-}
-
 func TestHTMLExtensions(t *testing.T) {
 	render := New(Options{
 		Directory:  "testdata/basic",

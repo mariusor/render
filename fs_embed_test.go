@@ -28,6 +28,7 @@ func TestEmbedFileSystemTemplateLookup(t *testing.T) {
 		},
 	})
 
+	r.CompileTemplates()
 	expect(t, r.TemplateLookup(fname1Rel) != nil, true)
 	expect(t, r.TemplateLookup(fname0Rel) != nil, true)
 	expect(t, r.TemplateLookup(fnameShouldParsedRel) != nil, true)

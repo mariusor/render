@@ -23,6 +23,7 @@ func TestIOFSEmbedTemplateLookup(t *testing.T) {
 		FileSystem: FS(EmbedFixtures),
 	})
 
+	r.CompileTemplates()
 	expect(t, r.TemplateLookup(fname1Rel) != nil, true)
 	expect(t, r.TemplateLookup(fname0Rel) != nil, true)
 	expect(t, r.TemplateLookup(fnameShouldParsedRel) != nil, true)
@@ -42,6 +43,7 @@ func TestIOFSDirTemplateLookup(t *testing.T) {
 		FileSystem: FS(os.DirFS(baseDir)),
 	})
 
+	r.CompileTemplates()
 	expect(t, r.TemplateLookup(fname1Rel) != nil, true)
 	expect(t, r.TemplateLookup(fname0Rel) != nil, true)
 	expect(t, r.TemplateLookup(fnameShouldParsedRel) != nil, true)
