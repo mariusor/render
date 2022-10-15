@@ -131,6 +131,8 @@ type Render struct {
 	templates       *template.Template
 	compiledCharset string
 	hasWatcher      bool
+
+	compiled bool
 }
 
 // New constructs a new Render instance with the supplied options.
@@ -143,7 +145,6 @@ func New(options ...Options) *Render {
 	r := Render{opt: o}
 
 	r.prepareOptions()
-	r.CompileTemplates()
 
 	return &r
 }
@@ -196,10 +197,12 @@ func (r *Render) prepareOptions() {
 func (r *Render) CompileTemplates() {
 	if r.opt.Asset == nil || r.opt.AssetNames == nil {
 		r.compileTemplatesFromDir()
+		r.compiled = true
 		return
 	}
 
 	r.compileTemplatesFromAsset()
+	r.compiled = true
 }
 
 func (r *Render) compileTemplatesFromDir() {
@@ -246,7 +249,7 @@ func (r *Render) compileTemplatesFromDir() {
 					panic(err)
 				}
 
-				name := (rel[0 : len(rel)-len(ext)])
+				name := rel[0 : len(rel)-len(ext)]
 				tmpl := tmpTemplates.New(filepath.ToSlash(name))
 
 				// Add our funcmaps.
@@ -255,8 +258,9 @@ func (r *Render) compileTemplatesFromDir() {
 				}
 
 				// Break out if this parsing fails. We don't want any silent server starts.
-				template.Must(tmpl.Funcs(helperFuncs).Parse(string(buf)))
-				break
+				if tmpl, err = tmpl.Funcs(helperFuncs).Parse(string(buf)); err != nil {
+					break
+				}
 			}
 		}
 		return nil
@@ -310,7 +314,7 @@ func (r *Render) compileTemplatesFromAsset() {
 					panic(err)
 				}
 
-				name := (rel[0 : len(rel)-len(ext)])
+				name := rel[0 : len(rel)-len(ext)]
 				tmpl := tmpTemplates.New(filepath.ToSlash(name))
 
 				// Add our funcmaps.
@@ -319,8 +323,9 @@ func (r *Render) compileTemplatesFromAsset() {
 				}
 
 				// Break out if this parsing fails. We don't want any silent server starts.
-				template.Must(tmpl.Funcs(helperFuncs).Parse(string(buf)))
-				break
+				if tmpl, err = tmpl.Funcs(helperFuncs).Parse(string(buf)); err != nil {
+					break
+				}
 			}
 		}
 	}
@@ -417,25 +422,11 @@ func (r *Render) Render(w io.Writer, e Engine, data interface{}) error {
 	return err
 }
 
-// Data writes out the raw bytes as binary data.
-func (r *Render) Data(w io.Writer, status int, v []byte) error {
-	head := Head{
-		ContentType: r.opt.BinaryContentType,
-		Status:      status,
-	}
-
-	d := Data{
-		Head: head,
-	}
-
-	return r.Render(w, d, v)
-}
-
 // HTML builds up the response from the specified template and bindings.
 func (r *Render) HTML(w io.Writer, status int, name string, binding interface{}, htmlOpt ...HTMLOptions) error {
 	// If we are in development mode, recompile the templates on every HTML request.
 	r.lock.RLock() // rlock here because we're reading the hasWatcher
-	if r.opt.IsDevelopment && !r.hasWatcher {
+	if (r.opt.IsDevelopment || !r.compiled) && !r.hasWatcher {
 		r.lock.RUnlock() // runlock here because CompileTemplates will lock
 		r.CompileTemplates()
 		r.lock.RLock()
@@ -468,68 +459,4 @@ func (r *Render) HTML(w io.Writer, status int, name string, binding interface{},
 	}
 
 	return r.Render(w, h, binding)
-}
-
-// JSON marshals the given interface object and writes the JSON response.
-func (r *Render) JSON(w io.Writer, status int, v interface{}) error {
-	head := Head{
-		ContentType: r.opt.JSONContentType + r.compiledCharset,
-		Status:      status,
-	}
-
-	j := JSON{
-		Head:          head,
-		Indent:        r.opt.IndentJSON,
-		Prefix:        r.opt.PrefixJSON,
-		UnEscapeHTML:  r.opt.UnEscapeHTML,
-		StreamingJSON: r.opt.StreamingJSON,
-	}
-
-	return r.Render(w, j, v)
-}
-
-// JSONP marshals the given interface object and writes the JSON response.
-func (r *Render) JSONP(w io.Writer, status int, callback string, v interface{}) error {
-	head := Head{
-		ContentType: r.opt.JSONPContentType + r.compiledCharset,
-		Status:      status,
-	}
-
-	j := JSONP{
-		Head:     head,
-		Indent:   r.opt.IndentJSON,
-		Callback: callback,
-	}
-
-	return r.Render(w, j, v)
-}
-
-// Text writes out a string as plain text.
-func (r *Render) Text(w io.Writer, status int, v string) error {
-	head := Head{
-		ContentType: r.opt.TextContentType + r.compiledCharset,
-		Status:      status,
-	}
-
-	t := Text{
-		Head: head,
-	}
-
-	return r.Render(w, t, v)
-}
-
-// XML marshals the given interface object and writes the XML response.
-func (r *Render) XML(w io.Writer, status int, v interface{}) error {
-	head := Head{
-		ContentType: r.opt.XMLContentType + r.compiledCharset,
-		Status:      status,
-	}
-
-	x := XML{
-		Head:   head,
-		Indent: r.opt.IndentXML,
-		Prefix: r.opt.PrefixXML,
-	}
-
-	return r.Render(w, x, v)
 }
