@@ -390,25 +390,28 @@ func (r *Render) Render(w io.Writer, e Engine, data interface{}) error {
 
 // HTML builds up the response from the specified template and bindings.
 func (r *Render) HTML(w io.Writer, status int, name string, binding interface{}, htmlOpt ...HTMLOptions) error {
+	opt := r.prepareHTMLOptions(htmlOpt)
+
 	// If we are in development mode, recompile the templates on every HTML request.
 	r.lock.RLock() // rlock here because we're reading the hasWatcher
-	if (r.opt.IsDevelopment || !r.compiled) && !r.hasWatcher {
+	if r.templates == nil {
 		r.lock.RUnlock() // runlock here because CompileTemplates will lock
-		r.CompileTemplates()
+
+		if len(opt.Funcs) > 0 {
+			r.opt.Funcs = append(r.opt.Funcs, opt.Funcs)
+		}
+		if err := r.CompileTemplates(); err != nil {
+			return err
+		}
 		r.lock.RLock()
 	}
 	templates := r.templates
 	r.lock.RUnlock()
 
-	opt := r.prepareHTMLOptions(htmlOpt)
 	if tpl := templates.Lookup(name); tpl != nil {
 		if len(opt.Layout) > 0 {
 			tpl.Funcs(r.layoutFuncs(templates, name, binding))
 			name = opt.Layout
-		}
-
-		if len(opt.Funcs) > 0 {
-			tpl.Funcs(opt.Funcs)
 		}
 	}
 
