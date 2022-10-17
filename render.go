@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -123,7 +124,7 @@ func (r *Render) prepareOptions() {
 		r.opt.Directory = "templates"
 	}
 	if r.opt.FileSystem == nil {
-		r.opt.FileSystem = &LocalFileSystem{}
+		r.opt.FileSystem = os.DirFS(".")
 	}
 	if len(r.opt.Extensions) == 0 {
 		r.opt.Extensions = []string{".tmpl"}
@@ -155,7 +156,7 @@ func (r *Render) compileTemplatesFromDir() error {
 	tmpTemplates.Delims(r.opt.Delims.Left, r.opt.Delims.Right)
 
 	// Walk the supplied directory and compile any files that match our extension list.
-	err := r.opt.FileSystem.Walk(dir, func(path string, info os.FileInfo, _ error) error {
+	err := fs.WalkDir(r.opt.FileSystem, dir, func(path string, info fs.DirEntry, err error) error {
 		if info == nil || info.IsDir() {
 			return nil
 		}
@@ -173,7 +174,7 @@ func (r *Render) compileTemplatesFromDir() error {
 		for _, extension := range r.opt.Extensions {
 			if ext == extension {
 				var buf []byte
-				buf, err = r.opt.FileSystem.ReadFile(path)
+				buf, err = fs.ReadFile(r.opt.FileSystem, path)
 				if err != nil {
 					return err
 				}
@@ -329,8 +330,12 @@ func (r *Render) HTML(w io.Writer, status int, name string, binding interface{},
 	opt := r.prepareHTMLOptions(htmlOpt)
 
 	// If we are in development mode, recompile the templates on every HTML request.
+	if r.opt.IsDevelopment {
+		r.templates = nil
+	}
+
 	r.lock.RLock() // rlock here because we're reading the hasWatcher
-	if r.templates == nil || r.opt.IsDevelopment && !r.hasWatche {
+	if r.templates == nil {
 		r.lock.RUnlock() // runlock here because CompileTemplates will lock
 
 		if len(opt.Funcs) > 0 {
