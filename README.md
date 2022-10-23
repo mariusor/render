@@ -1,4 +1,4 @@
-# Render [![GoDoc](http://godoc.org/github.com/unrolled/render?status.svg)](http://godoc.org/github.com/unrolled/render) [![Test](https://github.com/unrolled/render/workflows/Test/badge.svg?branch=v1)](https://github.com/unrolled/render/actions)
+# Render [![GoDoc](http://godoc.org/github.com/mariusor/render?status.svg)](http://godoc.org/github.com/mariusor/render) [![Test](https://github.com/mariusor/render/workflows/Test/badge.svg?branch=v1)](https://github.com/mariusor/render/actions)
 
 
 Render is a package that provides functionality for easily rendering JSON, XML, text, binary data, and HTML templates.
@@ -7,10 +7,6 @@ Render is a package that provides functionality for easily rendering JSON, XML, 
 Render can be used with pretty much any web framework providing you can access the `http.ResponseWriter` from your handler. The rendering functions simply wraps Go's existing functionality for marshaling and rendering data.
 
 - HTML: Uses the [html/template](http://golang.org/pkg/html/template/) package to render HTML templates.
-- JSON: Uses the [encoding/json](http://golang.org/pkg/encoding/json/) package to marshal data into a JSON-encoded response.
-- XML: Uses the [encoding/xml](http://golang.org/pkg/encoding/xml/) package to marshal data into an XML-encoded response.
-- Binary data: Passes the incoming data straight through to the `http.ResponseWriter`.
-- Text: Passes the incoming string straight through to the `http.ResponseWriter`.
 
 ~~~ go
 // main.go
@@ -20,42 +16,12 @@ import (
     "encoding/xml"
     "net/http"
 
-    "github.com/unrolled/render"
+    "github.com/mariusor/render"
 )
-
-type ExampleXml struct {
-    XMLName xml.Name `xml:"example"`
-    One     string   `xml:"one,attr"`
-    Two     string   `xml:"two,attr"`
-}
 
 func main() {
     r := render.New()
     mux := http.NewServeMux()
-
-    mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-        w.Write([]byte("Welcome, visit sub pages now."))
-    })
-
-    mux.HandleFunc("/data", func(w http.ResponseWriter, req *http.Request) {
-        r.Data(w, http.StatusOK, []byte("Some binary data here."))
-    })
-
-    mux.HandleFunc("/text", func(w http.ResponseWriter, req *http.Request) {
-        r.Text(w, http.StatusOK, "Plain text here")
-    })
-
-    mux.HandleFunc("/json", func(w http.ResponseWriter, req *http.Request) {
-        r.JSON(w, http.StatusOK, map[string]string{"hello": "json"})
-    })
-
-    mux.HandleFunc("/jsonp", func(w http.ResponseWriter, req *http.Request) {
-        r.JSONP(w, http.StatusOK, "callbackName", map[string]string{"hello": "jsonp"})
-    })
-
-    mux.HandleFunc("/xml", func(w http.ResponseWriter, req *http.Request) {
-        r.XML(w, http.StatusOK, ExampleXml{One: "hello", Two: "xml"})
-    })
 
     mux.HandleFunc("/html", func(w http.ResponseWriter, req *http.Request) {
         // Assumes you have a template in ./templates called "example.tmpl"
@@ -79,7 +45,7 @@ Render comes with a variety of configuration options _(Note: these are not the d
 // ...
 r := render.New(render.Options{
     Directory: "templates", // Specify what path to load the templates from.
-    FileSystem: &LocalFileSystem{}, // Specify filesystem from where files are loaded.
+    FileSystem: fs.Dir("."), // Specify filesystem from where files are loaded.
     Asset: func(name string) ([]byte, error) { // Load from an Asset function instead of file.
       return []byte("template content"), nil
     },
@@ -92,10 +58,6 @@ r := render.New(render.Options{
     Delims: render.Delims{"{[{", "}]}"}, // Sets delimiters to the specified strings.
     Charset: "UTF-8", // Sets encoding for content-types. Default is "UTF-8".
     DisableCharset: true, // Prevents the charset from being appended to the content type header.
-    IndentJSON: true, // Output human readable JSON.
-    IndentXML: true, // Output human readable XML.
-    PrefixJSON: []byte(")]}',\n"), // Prefixes JSON responses with the given bytes.
-    PrefixXML: []byte("<?xml version='1.0' encoding='UTF-8'?>"), // Prefixes XML responses with the given bytes.
     HTMLContentType: "application/xhtml+xml", // Output XHTML content type instead of default "text/html".
     IsDevelopment: true, // Render will now recompile the templates on every HTML response.
     UseMutexLock: true, // Overrides the default no lock implementation and uses the standard `sync.RWMutex` lock.
@@ -126,16 +88,7 @@ r := render.New(render.Options{
     Delims: render.Delims{"{{", "}}"},
     Charset: "UTF-8",
     DisableCharset: false,
-    IndentJSON: false,
-    IndentXML: false,
-    PrefixJSON: []byte(""),
-    PrefixXML: []byte(""),
-    BinaryContentType: "application/octet-stream",
     HTMLContentType: "text/html",
-    JSONContentType: "application/json",
-    JSONPContentType: "application/javascript",
-    TextContentType: "text/plain",
-    XMLContentType: "application/xhtml+xml",
     IsDevelopment: false,
     UseMutexLock: false,
     UnEscapeHTML: false,
@@ -148,20 +101,16 @@ r := render.New(render.Options{
 ~~~
 
 ### JSON vs Streaming JSON
-By default, Render does **not** stream JSON to the `http.ResponseWriter`. It instead marshalls your object into a byte array, and if no errors occurred, writes that byte array to the `http.ResponseWriter`. If you would like to use the built it in streaming functionality (`json.Encoder`), you can set the `StreamingJSON` setting to `true`. This will stream the output directly to the `http.ResponseWriter`. Also note that streaming is only implemented in `render.JSON` and not `render.JSONP`.
+By default, Render does **not** stream JSON to the `http.ResponseWriter`. It instead marshalls your object into a byte array, and if no errors occurred, writes that byte array to the `http.ResponseWriter`. O
 
 ### Loading Templates
 By default Render will attempt to load templates with a '.tmpl' extension from the "templates" directory. Templates are found by traversing the templates directory and are named by path and basename. For instance, the following directory structure:
 
 ~~~
 templates/
-  |
-  |__ admin/
-  |      |
-  |      |__ index.tmpl
-  |      |
-  |      |__ edit.tmpl
-  |
+  |_ admin/
+  |    |__ index.tmpl
+  |    |__ edit.tmpl
   |__ home.tmpl
 ~~~
 
@@ -184,9 +133,7 @@ var embeddedTemplates embed.FS
 
 r := render.New(render.Options{
     Directory: "templates",
-    FileSystem: &render.EmbedFileSystem{
-        FS: embeddedTemplates,
-    },
+    FileSystem: embeddedTemplates,
     Extensions: []string{".html", ".tmpl"},
 })
 // ...
@@ -264,39 +211,12 @@ import (
     "encoding/xml"
     "net/http"
 
-    "github.com/unrolled/render"
+    "github.com/mariusor/render"
 )
-
-type ExampleXml struct {
-    XMLName xml.Name `xml:"example"`
-    One     string   `xml:"one,attr"`
-    Two     string   `xml:"two,attr"`
-}
 
 func main() {
     r := render.New(render.Options{})
     mux := http.NewServeMux()
-
-    // This will set the Content-Type header to "application/octet-stream".
-    // Note that this does not receive a charset value.
-    mux.HandleFunc("/data", func(w http.ResponseWriter, req *http.Request) {
-        r.Data(w, http.StatusOK, []byte("Some binary data here."))
-    })
-
-    // This will set the Content-Type header to "application/json; charset=UTF-8".
-    mux.HandleFunc("/json", func(w http.ResponseWriter, req *http.Request) {
-        r.JSON(w, http.StatusOK, map[string]string{"hello": "json"})
-    })
-
-    // This will set the Content-Type header to "text/xml; charset=UTF-8".
-    mux.HandleFunc("/xml", func(w http.ResponseWriter, req *http.Request) {
-        r.XML(w, http.StatusOK, ExampleXml{One: "hello", Two: "xml"})
-    })
-
-    // This will set the Content-Type header to "text/plain; charset=UTF-8".
-    mux.HandleFunc("/text", func(w http.ResponseWriter, req *http.Request) {
-        r.Text(w, http.StatusOK, "Plain text here")
-    })
 
     // This will set the Content-Type header to "text/html; charset=UTF-8".
     mux.HandleFunc("/html", func(w http.ResponseWriter, req *http.Request) {
@@ -318,41 +238,14 @@ import (
     "encoding/xml"
     "net/http"
 
-    "github.com/unrolled/render"
+    "github.com/mariusor/render"
 )
-
-type ExampleXml struct {
-    XMLName xml.Name `xml:"example"`
-    One     string   `xml:"one,attr"`
-    Two     string   `xml:"two,attr"`
-}
 
 func main() {
     r := render.New(render.Options{
         Charset: "ISO-8859-1",
     })
     mux := http.NewServeMux()
-
-    // This will set the Content-Type header to "application/octet-stream".
-    // Note that this does not receive a charset value.
-    mux.HandleFunc("/data", func(w http.ResponseWriter, req *http.Request) {
-        r.Data(w, http.StatusOK, []byte("Some binary data here."))
-    })
-
-    // This will set the Content-Type header to "application/json; charset=ISO-8859-1".
-    mux.HandleFunc("/json", func(w http.ResponseWriter, req *http.Request) {
-        r.JSON(w, http.StatusOK, map[string]string{"hello": "json"})
-    })
-
-    // This will set the Content-Type header to "text/xml; charset=ISO-8859-1".
-    mux.HandleFunc("/xml", func(w http.ResponseWriter, req *http.Request) {
-        r.XML(w, http.StatusOK, ExampleXml{One: "hello", Two: "xml"})
-    })
-
-    // This will set the Content-Type header to "text/plain; charset=ISO-8859-1".
-    mux.HandleFunc("/text", func(w http.ResponseWriter, req *http.Request) {
-        r.Text(w, http.StatusOK, "Plain text here")
-    })
 
     // This will set the Content-Type header to "text/html; charset=ISO-8859-1".
     mux.HandleFunc("/html", func(w http.ResponseWriter, req *http.Request) {
@@ -397,7 +290,7 @@ import (
     "net/http"
 
     "github.com/labstack/echo"
-    "github.com/unrolled/render"
+    "github.com/mariusor/render"
 )
 
 type RenderWrapper struct { // We need to wrap the renderer because we need a different signature for echo.
@@ -423,108 +316,3 @@ func main() {
 }
 ~~~
 
-### [Gin](https://github.com/gin-gonic/gin)
-~~~ go
-// main.go
-package main
-
-import (
-    "net/http"
-
-    "github.com/gin-gonic/gin"
-    "github.com/unrolled/render"
-)
-
-func main() {
-    r := render.New(render.Options{
-        IndentJSON: true,
-    })
-
-    router := gin.Default()
-
-    router.GET("/", func(c *gin.Context) {
-        r.JSON(c.Writer, http.StatusOK, map[string]string{"welcome": "This is rendered JSON!"})
-    })
-
-    router.Run("127.0.0.1:8080")
-}
-~~~
-
-### [Goji](https://github.com/zenazn/goji)
-~~~ go
-// main.go
-package main
-
-import (
-    "net/http"
-
-    "github.com/zenazn/goji"
-    "github.com/zenazn/goji/web"
-    "github.com/unrolled/render"
-)
-
-func main() {
-    r := render.New(render.Options{
-        IndentJSON: true,
-    })
-
-    goji.Get("/", func(c web.C, w http.ResponseWriter, req *http.Request) {
-        r.JSON(w, http.StatusOK, map[string]string{"welcome": "This is rendered JSON!"})
-    })
-    goji.Serve()  // Defaults to ":8000".
-}
-~~~
-
-### [Negroni](https://github.com/codegangsta/negroni)
-~~~ go
-// main.go
-package main
-
-import (
-    "net/http"
-
-    "github.com/urfave/negroni"
-    "github.com/unrolled/render"
-)
-
-func main() {
-    r := render.New(render.Options{
-        IndentJSON: true,
-    })
-    mux := http.NewServeMux()
-
-    mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-        r.JSON(w, http.StatusOK, map[string]string{"welcome": "This is rendered JSON!"})
-    })
-
-    n := negroni.Classic()
-    n.UseHandler(mux)
-    n.Run("127.0.0.1:8080")
-}
-~~~
-
-### [Traffic](https://github.com/pilu/traffic)
-~~~ go
-// main.go
-package main
-
-import (
-    "net/http"
-
-    "github.com/pilu/traffic"
-    "github.com/unrolled/render"
-)
-
-func main() {
-    r := render.New(render.Options{
-        IndentJSON: true,
-    })
-
-    router := traffic.New()
-    router.Get("/", func(w traffic.ResponseWriter, req *traffic.Request) {
-        r.JSON(w, http.StatusOK, map[string]string{"welcome": "This is rendered JSON!"})
-    })
-
-    router.Run()  // Defaults to "127.0.0.1:3000".
-}
-~~~

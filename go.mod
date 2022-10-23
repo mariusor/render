@@ -1,4 +1,3 @@
-module github.com/unrolled/render
+module github.com/mariusor/render
 
 go 1.17
-
