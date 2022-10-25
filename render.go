@@ -289,6 +289,33 @@ func (r *Render) layoutFuncs(templates *template.Template, name string, binding 
 	}
 }
 
+func (r *Render) prepareHTMLOptions(htmlOpt []HTMLOptions) HTMLOptions {
+	layout := r.opt.Layout
+	funcs := template.FuncMap{}
+
+	for _, tmp := range r.opt.Funcs {
+		for k, v := range tmp {
+			funcs[k] = v
+		}
+	}
+
+	if len(htmlOpt) > 0 {
+		opt := htmlOpt[0]
+		if len(opt.Layout) > 0 {
+			layout = opt.Layout
+		}
+
+		for k, v := range opt.Funcs {
+			funcs[k] = v
+		}
+	}
+
+	return HTMLOptions{
+		Layout: layout,
+		Funcs:  funcs,
+	}
+}
+
 // Render is the generic function called by XML, JSON, Data, HTML, and can be called by custom implementations.
 func (r *Render) Render(w io.Writer, e Engine, data interface{}) error {
 	err := e.Render(w, data)
@@ -299,7 +326,9 @@ func (r *Render) Render(w io.Writer, e Engine, data interface{}) error {
 }
 
 // HTML builds up the response from the specified template and bindings.
-func (r *Render) HTML(w io.Writer, status int, name string, binding interface{}, funcs ...template.FuncMap) error {
+func (r *Render) HTML(w io.Writer, status int, name string, binding interface{}, htmlOpt ...HTMLOptions) error {
+	opt := r.prepareHTMLOptions(htmlOpt)
+
 	// If we are in development mode, recompile the templates on every HTML request.
 	if r.opt.IsDevelopment {
 		r.templates = nil
@@ -309,8 +338,8 @@ func (r *Render) HTML(w io.Writer, status int, name string, binding interface{},
 	if r.templates == nil {
 		r.lock.RUnlock() // runlock here because CompileTemplates will lock
 
-		if len(funcs) > 0 {
-			r.opt.Funcs = append(r.opt.Funcs, funcs...)
+		if len(opt.Funcs) > 0 {
+			r.opt.Funcs = append(r.opt.Funcs, opt.Funcs)
 		}
 		if err := r.CompileTemplates(); err != nil {
 			return err
@@ -320,9 +349,12 @@ func (r *Render) HTML(w io.Writer, status int, name string, binding interface{},
 	templates := r.templates
 	r.lock.RUnlock()
 
-	//if tpl := templates.Lookup(name); tpl == nil {
-	//	return errors.New("invalid template name " + name)
-	//}
+	if tpl := templates.Lookup(name); tpl != nil {
+		if len(opt.Layout) > 0 {
+			tpl.Funcs(r.layoutFuncs(templates, name, binding))
+			name = opt.Layout
+		}
+	}
 
 	head := Head{
 		ContentType: r.opt.HTMLContentType + r.compiledCharset,
