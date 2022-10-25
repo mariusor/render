@@ -264,29 +264,6 @@ func TestHTMLDefaultCharset(t *testing.T) {
 	expect(t, res.Body.String(), "<h1>Hello gophers</h1>\n")
 }
 
-func TestHTMLOverrideLayout(t *testing.T) {
-	render := New(Options{
-		Directory: "testdata/basic",
-		Layout:    "layout",
-	})
-
-	var err error
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err = render.HTML(w, http.StatusOK, "content", "gophers", HTMLOptions{
-			Layout: "another_layout",
-		})
-	})
-
-	res := httptest.NewRecorder()
-	req, _ := http.NewRequestWithContext(ctx, "GET", "/foo", nil)
-	h.ServeHTTP(res, req)
-
-	expectNil(t, err)
-	expect(t, res.Code, 200)
-	expect(t, res.Header().Get(ContentType), ContentHTML+"; charset=UTF-8")
-	expect(t, res.Body.String(), "another head\n<h1>gophers</h1>\n\nanother foot\n")
-}
-
 func TestHTMLNoRace(t *testing.T) {
 	// This test used to fail if run with -race
 	render := New(Options{
@@ -338,9 +315,7 @@ func TestHTMLLoadFromAssets(t *testing.T) {
 
 	var err error
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err = render.HTML(w, http.StatusOK, "test", "gophers", HTMLOptions{
-			Layout: "layout",
-		})
+		err = render.HTML(w, http.StatusOK, "test", "gophers")
 	})
 
 	res := httptest.NewRecorder()
