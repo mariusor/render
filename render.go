@@ -40,10 +40,6 @@ type Options struct {
 	Directory string
 	// FileSystem to access files
 	FileSystem fs.FS
-	// Asset function to use in place of directory. Defaults to nil.
-	Asset func(name string) ([]byte, error)
-	// AssetNames function to use in place of directory. Defaults to nil.
-	AssetNames func() []string
 	// Layout template name. Will not render a layout if blank (""). Defaults to blank ("").
 	Layout string
 	// Extensions to parse template files from. Defaults to [".tmpl"].
@@ -143,11 +139,7 @@ func (r *Render) prepareOptions() {
 }
 
 func (r *Render) CompileTemplates() error {
-	if r.opt.Asset == nil || r.opt.AssetNames == nil {
-		return r.compileTemplatesFromDir()
-	}
-
-	return r.compileTemplatesFromAsset()
+	return r.compileTemplatesFromDir()
 }
 
 func (r *Render) compileTemplatesFromDir() error {
@@ -201,53 +193,6 @@ func (r *Render) compileTemplatesFromDir() error {
 	r.templates = tmpTemplates
 	return err
 }
-
-func (r *Render) compileTemplatesFromAsset() error {
-	dir := r.opt.Directory
-	tmpTemplates := template.New(dir)
-	tmpTemplates.Delims(r.opt.Delims.Left, r.opt.Delims.Right)
-
-	for _, path := range r.opt.AssetNames() {
-		if !strings.HasPrefix(path, dir) {
-			continue
-		}
-
-		rel, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-
-		ext := ""
-		if strings.Contains(rel, ".") {
-			ext = "." + strings.Join(strings.Split(rel, ".")[1:], ".")
-		}
-
-		for _, extension := range r.opt.Extensions {
-			if ext == extension {
-				buf, err := r.opt.Asset(path)
-				if err != nil {
-					return err
-				}
-
-				name := rel[0 : len(rel)-len(ext)]
-				tmpl := tmpTemplates.New(filepath.ToSlash(name))
-
-				// Add our funcmaps.
-				for _, funcs := range r.opt.Funcs {
-					tmpl.Funcs(funcs)
-				}
-
-				// Break out if this parsing fails. We don't want any silent server starts.
-				if tmpl, err = tmpl.Funcs(helperFuncs).Parse(string(buf)); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.templates = tmpTemplates
-	return nil
 }
 
 // TemplateLookup is a wrapper around template.Lookup and returns
