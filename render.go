@@ -144,12 +144,21 @@ func (r *Render) CompileTemplates() error {
 
 func (r *Render) compileTemplatesFromDir() error {
 	dir := r.opt.Directory
-	tmpTemplates := template.New(dir)
-	tmpTemplates.Delims(r.opt.Delims.Left, r.opt.Delims.Right)
+	r.templates = template.New(dir)
+	r.templates.Delims(r.opt.Delims.Left, r.opt.Delims.Right)
 
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	// Add our funcmaps.
+	for _, funcs := range r.opt.Funcs {
+		r.templates.Funcs(funcs)
+	}
+	r.templates.Funcs(helperFuncs)
 	// Walk the supplied directory and compile any files that match our extension list.
-	err := fs.WalkDir(r.opt.FileSystem, dir, func(path string, info fs.DirEntry, err error) error {
-		if info == nil || info.IsDir() {
+	// We don't use template.ParseFS because it uses a different logic for naming the children templates.
+	return fs.WalkDir(r.opt.FileSystem, dir, func(path string, info fs.DirEntry, err error) error {
+		if info == nil || info.IsDir() || err != nil {
 			return nil
 		}
 
@@ -172,27 +181,16 @@ func (r *Render) compileTemplatesFromDir() error {
 				}
 
 				name := rel[0 : len(rel)-len(ext)]
-				tmpl := tmpTemplates.New(filepath.ToSlash(name))
-
-				// Add our funcmaps.
-				for _, funcs := range r.opt.Funcs {
-					tmpl.Funcs(funcs)
-				}
+				tmpl := r.templates.New(filepath.ToSlash(name))
 
 				// Break out if this parsing fails. We don't want any silent server starts.
-				if tmpl, err = tmpl.Funcs(helperFuncs).Parse(string(buf)); err != nil {
+				if tmpl, err = tmpl.Parse(string(buf)); err != nil {
 					break
 				}
 			}
 		}
 		return err
 	})
-
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.templates = tmpTemplates
-	return err
-}
 }
 
 // TemplateLookup is a wrapper around template.Lookup and returns
@@ -292,6 +290,9 @@ func (r *Render) HTML(w io.Writer, status int, name string, binding interface{},
 		r.lock.RLock()
 	}
 	templates := r.templates
+	if len(opt.Funcs) > 0 {
+		templates.Funcs(opt.Funcs)
+	}
 	r.lock.RUnlock()
 
 	if tpl := templates.Lookup(name); tpl != nil {
